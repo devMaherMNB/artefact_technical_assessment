@@ -1,0 +1,15 @@
+# Core Data & DB
+pandas==2.1.1
+polars==0.19.12
+sqlalchemy==2.0.21
+psycopg2-binary==2.9.9
+faker==19.11.0
+python-dotenv==1.0.0
+
+# Testing
+pytest==7.4.2
+pytest-postgresql==5.1.0
+
+# Formatting
+black==23.9.1
+flake8==6.1.0
