@@ -2,7 +2,7 @@ CREATE SCHEMA IF NOT EXISTS supply_chain;
 
 -- Time Dimension
 CREATE TABLE supply_chain.dim_time (
-    date_id INT PRIMARY KEY,           -- Format: YYYYMMDD (20240115)
+    date_id INT PRIMARY KEY,           
     full_date DATE NOT NULL UNIQUE,
     year INT NOT NULL,
     quarter INT NOT NULL,
@@ -52,8 +52,8 @@ CREATE TABLE supply_chain.dim_orders (
     order_id SERIAL PRIMARY KEY,
     order_date DATE NOT NULL,
     customer_id VARCHAR(50),
-    order_status VARCHAR(50) NOT NULL,  -- 'completed', 'pending', 'cancelled'
-    order_priority VARCHAR(20),         -- 'high', 'medium', 'low'
+    order_status VARCHAR(50) NOT NULL,  
+    order_priority VARCHAR(20),        
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
