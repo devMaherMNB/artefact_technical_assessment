@@ -41,6 +41,6 @@ CREATE TABLE IF NOT EXISTS dw_online_retail.fact_sales (
 );
 
 CREATE INDEX idx_fact_sales_date ON dw_online_retail.fact_sales(date_id);
-CREATE INDEX idx_fact_sales_product ON dw_online_retail.fact_sales(invoice_no);
-CREATE INDEX idx_fact_sales_customer ON dw_online_retail.dim_customers(customer_id);
-CREATE INDEX idx_products_stock_code ON dw_online_retail.dim_products(product_id);
+CREATE INDEX idx_fact_sales_product ON dw_online_retail.fact_sales(product_id);
+CREATE INDEX idx_fact_sales_customer ON dw_online_retail.fact_sales(customer_id);
+CREATE INDEX idx_fact_sales_invoice_no ON dw_online_retail.fact_sales(invoice_no);
