@@ -11,6 +11,7 @@ python-dotenv==1.0.0
 pytest==7.4.2
 pytest-postgresql==5.1.0
 
+
 # Formatting
 black==23.9.1
 flake8==6.1.0
