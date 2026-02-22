@@ -1,3 +1,33 @@
+CREATE SCHEMA IF NOT EXISTS staging_online_retail;
+
+CREATE TABLE IF NOT EXISTS staging_online_retail.raw_transactions (
+    invoice_no      VARCHAR(20),
+    stock_code      VARCHAR(20),
+    description     VARCHAR(255),
+    quantity        INTEGER,
+    invoice_date    VARCHAR(50),
+    unit_price      NUMERIC(10,2),
+    customer_id     VARCHAR(20),
+    country         VARCHAR(100),
+    load_timestamp  TIMESTAMP DEFAULT NOW(),
+    batch_id        UUID DEFAULT gen_random_uuid()
+);
+
+CREATE TABLE IF NOT EXISTS staging_online_retail.raw_transactions_archive (
+    invoice_no      VARCHAR(20),
+    stock_code      VARCHAR(20),
+    description     VARCHAR(255),
+    quantity        INTEGER,
+    invoice_date    VARCHAR(50),
+    unit_price      NUMERIC(10,2),
+    customer_id     VARCHAR(20),
+    country         VARCHAR(100),
+    load_timestamp  TIMESTAMP DEFAULT NOW(),
+    batch_id        UUID DEFAULT gen_random_uuid(),
+    snapshot_id     UUID NOT NULL,
+    snapshot_date   DATE NOT NULL
+);
+
 CREATE SCHEMA IF NOT EXISTS dw_online_retail;
 
 -- Dimension Tables First
@@ -38,7 +68,7 @@ CREATE TABLE IF NOT EXISTS dw_online_retail.fact_sales (
     total_value     NUMERIC(12,2) NOT NULL,
     load_timestamp  TIMESTAMP DEFAULT NOW(),
     batch_id        UUID DEFAULT gen_random_uuid()
-);
+); 
 
 CREATE INDEX idx_fact_sales_date ON dw_online_retail.fact_sales(date_id);
 CREATE INDEX idx_fact_sales_product ON dw_online_retail.fact_sales(product_id);
