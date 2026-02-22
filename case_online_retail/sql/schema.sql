@@ -3,7 +3,7 @@ CREATE SCHEMA IF NOT EXISTS dw_online_retail;
 -- Dimension Tables First
 CREATE TABLE IF NOT EXISTS dw_online_retail.dim_customers (
     customer_id     SERIAL PRIMARY KEY,
-    raw_customer_id VARCHAR(20) UNIQUE,  
+    raw_customer_id VARCHAR(20) UNIQUE, 
     country         VARCHAR(100)
 );
 
@@ -40,3 +40,7 @@ CREATE TABLE IF NOT EXISTS dw_online_retail.fact_sales (
     batch_id        UUID DEFAULT gen_random_uuid()
 );
 
+CREATE INDEX idx_fact_sales_date ON dw_online_retail.fact_sales(date_id);
+CREATE INDEX idx_fact_sales_product ON dw_online_retail.fact_sales(invoice_no);
+CREATE INDEX idx_fact_sales_customer ON dw_online_retail.dim_customers(customer_id);
+CREATE INDEX idx_products_stock_code ON dw_online_retail.dim_products(product_id);
