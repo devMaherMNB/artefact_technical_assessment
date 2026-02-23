@@ -1,6 +1,6 @@
 {
-    "catalog_version": "1.0",
-    "last_updated": "2026-02-22",
+    "catalog_version": "1.1",
+    "last_updated": "2026-02-23",
     "project": "Online Retail Sales Data Engineering",
     "owner": "Maher Banshi",
     "description": "Metadata catalog for the Online Retail ETL pipeline. Documents data sources, schemas, lineage, and quality metrics.",
@@ -32,7 +32,7 @@
       {
         "name": "staging_online_retail",
         "layer": "Bronze",
-        "description": "Raw landing zone — exact copy of source data with pipeline metadata appended",
+        "description": "Raw landing zone — exact copy of source data with pipeline metadata appended. Schema initialised automatically by ingest.py on first run.",
         "tables": [
           {
             "name": "raw_transactions",
@@ -42,16 +42,41 @@
           },
           {
             "name": "raw_transactions_archive",
-            "description": "Daily snapshot for versioning and audit trail",
+            "description": "Daily snapshot for versioning and audit trail. Created and populated by snapshot_staging DAG task.",
             "partition_key": "snapshot_date",
-            "strategy": "One snapshot per day — DATE key enforces idempotency"
+            "load_strategy": "DELETE today's snapshot + INSERT — idempotent on reruns"
+          }
+        ]
+      },
+      {
+        "name": "silver_online_retail",
+        "layer": "Silver",
+        "description": "Cleaned intermediate layer with natural keys. Persisted to decouple transform from load — if load fails, re-run load from Silver without re-reading source.",
+        "tables": [
+          {
+            "name": "products",
+            "rows": 3937,
+            "load_strategy": "if_exists=replace — idempotent, Silver is transient",
+            "notes": "Distinct stock_code + description pairs"
+          },
+          {
+            "name": "customers",
+            "rows": 4372,
+            "load_strategy": "if_exists=replace — idempotent",
+            "notes": "Includes UNKNOWN sentinel row for anonymous transactions"
+          },
+          {
+            "name": "transactions",
+            "rows": 534125,
+            "load_strategy": "if_exists=replace — idempotent",
+            "notes": "Cleaned facts with natural keys — no surrogate keys yet"
           }
         ]
       },
       {
         "name": "dw_online_retail",
         "layer": "Gold",
-        "description": "Star schema data warehouse — cleaned, transformed, and optimized for analytics",
+        "description": "Star schema data warehouse — surrogate keys, FK constraints, indexes. Optimized for analytics.",
         "tables": [
           {
             "name": "dim_customers",
@@ -59,6 +84,7 @@
             "rows": 4372,
             "natural_key": "raw_customer_id",
             "surrogate_key": "customer_id (SERIAL)",
+            "load_strategy": "INSERT ON CONFLICT DO UPDATE — upsert",
             "notes": "Includes UNKNOWN sentinel for anonymous transactions"
           },
           {
@@ -67,6 +93,7 @@
             "rows": 3937,
             "natural_key": "stock_code",
             "surrogate_key": "product_id (SERIAL)",
+            "load_strategy": "INSERT ON CONFLICT DO UPDATE — upsert",
             "notes": "unit_price not stored here — captured on fact at time of sale"
           },
           {
@@ -75,6 +102,7 @@
             "rows": 305,
             "natural_key": "full_date",
             "surrogate_key": "date_id (YYYYMMDD integer)",
+            "load_strategy": "INSERT ON CONFLICT DO NOTHING — date records are immutable",
             "notes": "Human-readable integer key — naturally sortable without joins"
           },
           {
@@ -83,20 +111,56 @@
             "rows": 534125,
             "grain": "One row per invoice line (invoice_no + stock_code)",
             "indexes": ["date_id", "product_id", "customer_id", "invoice_no"],
-            "notes": "total_value pre-computed as quantity * unit_price"
+            "load_strategy": "Append with chunksize=1000 — bulk insert in batches",
+            "notes": "total_value pre-computed as quantity * unit_price. Surrogate keys resolved via left-join merge before insert."
           }
         ]
       }
     ],
   
     "lineage": {
-      "description": "End-to-end data flow",
+      "description": "End-to-end data flow — 5 Airflow tasks in sequence",
       "steps": [
-        {"step": 1, "from": "archive/online_retail.csv", "to": "staging_online_retail.raw_transactions", "script": "src/ingest.py"},
-        {"step": 2, "from": "staging_online_retail.raw_transactions", "to": "staging_online_retail.raw_transactions_archive", "script": "sql/versioning.sql (snapshot)"},
-        {"step": 3, "from": "staging_online_retail.raw_transactions", "to": "silver_online_retail.products + silver_online_retail.customers + silver_online_retail.transactions", "script": "src/transform.py"},
-        {"step": 4, "from": "silver_online_retail.products + silver_online_retail.customers + silver_online_retail.transactions", "to": "dw_online_retail.dim_* + fact_sales", "script": "src/load.py"},
-        {"step": 5, "from": "dw_online_retail.fact_sales", "to": "monitor logs + alerts", "script": "src/monitor.py"}
+        {
+          "step": 1,
+          "task": "ingest_raw_data",
+          "from": "archive/online_retail.csv",
+          "to": "staging_online_retail.raw_transactions",
+          "script": "src/ingest.py",
+          "notes": "Also initialises all schemas and tables via schema.sql on first run"
+        },
+        {
+          "step": 2,
+          "task": "snapshot_staging",
+          "from": "staging_online_retail.raw_transactions",
+          "to": "staging_online_retail.raw_transactions_archive",
+          "script": "dags/retail_etl_dag.py (run_snapshot)",
+          "notes": "Daily snapshot — idempotent via DELETE + INSERT pattern"
+        },
+        {
+          "step": 3,
+          "task": "transform_to_silver",
+          "from": "staging_online_retail.raw_transactions",
+          "to": "silver_online_retail.products + customers + transactions",
+          "script": "src/transform.py",
+          "notes": "Dedup, null handling, type casting, total_value derivation"
+        },
+        {
+          "step": 4,
+          "task": "load_to_gold_dw",
+          "from": "silver_online_retail.*",
+          "to": "dw_online_retail.dim_* + fact_sales",
+          "script": "src/load.py",
+          "notes": "Upserts dims, resolves surrogate keys via left-join merge, bulk inserts facts"
+        },
+        {
+          "step": 5,
+          "task": "monitor_data_quality",
+          "from": "all three layers",
+          "to": "logs + alerts",
+          "script": "src/monitor.py",
+          "notes": "Audits Bronze → Silver → Gold row counts. on_failure_callback fires structured alert on any task failure."
+        }
       ]
     },
   
@@ -115,8 +179,9 @@
       "orchestrator": "Apache Airflow",
       "dag_id": "retail_etl_dag",
       "schedule": "@daily",
+      "tasks": ["ingest_raw_data", "snapshot_staging", "transform_to_silver", "load_to_gold_dw", "monitor_data_quality"],
       "dag_file": "dags/retail_etl_dag.py",
+      "failure_alerting": "on_failure_callback — structured log with DAG, task, execution date, and log URL",
       "deployment": "Local: Docker Compose | Production: AWS MWAA"
     }
   }
-  
