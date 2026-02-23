@@ -24,7 +24,7 @@ FROM supply_chain.fact_shipments fs
 JOIN supply_chain.dim_products dp ON fs.product_id = dp.product_id
 GROUP BY dp.product_category;
 
--- 3. Identify suppliers with a significant increase or decrease in shipment values compared to the previous year (Should be revised)
+-- 3. Identify suppliers with a significant increase or decrease in shipment values compared to the previous year
 WITH supplier_annual_values AS (
     SELECT
         ds.supplier_name,
@@ -50,6 +50,8 @@ ORDER BY supplier_name, year;
 
 -- 4. Audit trigger for shipment changes
 -- Create an audit table
+-- Note: Minimal viable audit — tracking only shipment_value as it's the primary business metric.
+-- Full column audit would use hstore or a JSON diff.
 CREATE TABLE IF NOT EXISTS supply_chain.shipment_audit_log (
     audit_id      SERIAL PRIMARY KEY,
     shipment_id   INT,

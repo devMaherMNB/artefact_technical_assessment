@@ -19,7 +19,7 @@ def run_ingest():
     df = pd.read_csv(DATA_PATH, encoding='ISO-8859-1') # the encoding is required for special characters
     logger.info(f"Loaded {len(df)} rows from {DATA_PATH}")
 
-    # Add pipeline metadata
+    # Add pipeline metadata for observability: allows tracing which run loaded which rows
     df['load_timestamp'] = datetime.now()
     df['batch_id'] = str(uuid.uuid4())
 
@@ -56,9 +56,11 @@ def run_ingest():
             )
         """))
     
-    # Now safe to truncate and load (idempotent)
+    # TRUNCATE before load ensures idempotency: it's faster than DELETE and resets no identity.
+    # Every run starts with a clean slate in the staging area.
     with engine.begin() as conn:
         conn.execute(text("TRUNCATE TABLE staging_online_retail.raw_transactions"))
+        # Using if_exists='append' after TRUNCATE is safe and avoids dropping/recreating the table schema.
         df.to_sql(
             'raw_transactions',
             conn,

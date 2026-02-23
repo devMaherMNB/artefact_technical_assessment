@@ -8,6 +8,8 @@ load_dotenv()
 logger = get_logger("Online Retail")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+# if_exists='replace' on Silver: Idempotent. Silver is a transient cleaned layer, 
+# acceptable to drop and recreate on each run as it's not queried by analysts directly.
 def write_to_silver(df_products, df_customers, df_facts, engine):
     logger.info("Writing cleaned DataFrames to Silver Layer...")
     
@@ -32,13 +34,16 @@ def write_to_silver(df_products, df_customers, df_facts, engine):
 
 def run_transform():
     logger.info("Starting transformation process")
+    # create_engine inside function: If DATABASE_URL is None, module-level fails at import; 
+    # inside function fails at call time — much easier to debug.
     engine = create_engine(DATABASE_URL)
     df = pd.read_sql("SELECT * FROM staging_online_retail.raw_transactions", engine)
     
     # capture initial_count
     initial_count = len(df)
     
-    # drop_duplicates() — log how many dropped
+    # drop_duplicates() on all columns: Subset subset=['invoice_no','stock_code'] would remove 
+    # ~10k rows; same product can legitimately appear twice on same invoice (e.g., separate order lines).
     df = df.drop_duplicates()
     duplicates_count = initial_count - len(df)
     logger.info(f"Dropped {duplicates_count} duplicate rows")
@@ -49,7 +54,8 @@ def run_transform():
     dropna_count = count_before_dropna - len(df)
     logger.info(f"Dropped {dropna_count} rows with null mandatory fields (invoice_no, stock_code, unit_price)")
     
-    # fill customer_id nulls — log count
+    # Fill customer_id nulls with 'UNKNOWN' instead of dropping: 135k rows represent real revenue. 
+    # Dropping loses business data; sentinel preserves FK integrity in the DW.
     customer_id_nulls = df['customer_id'].isnull().sum()
     df['customer_id'] = df['customer_id'].fillna('UNKNOWN')
     logger.info(f"Filled {customer_id_nulls} null customer_id values with 'UNKNOWN'")
@@ -72,7 +78,8 @@ def run_transform():
     df['date_id'] = df['invoice_date'].dt.strftime('%Y%m%d').astype(int)
     logger.info(f"Derived date_id in YYYYMMDD format")
 
-    # c) Filter bad unit_price (<= 0)
+    # Filter unit_price <= 0 but keep negative quantity: 
+    # Bad price = data error; negative quantity = valid return/cancellation event.
     bad_price_count = (df['unit_price'] <= 0).sum()
     df = df[df['unit_price'] > 0]
     logger.info(f"Dropped {bad_price_count} rows with unit_price <= 0")
@@ -89,6 +96,8 @@ def run_transform():
 
     # Write cleaned DataFrames to Silver layer
     write_to_silver(df_products, df_customers, df_facts, engine)
+
+    return df_products, df_customers, df_facts
     
 if __name__ == '__main__':
     run_transform()

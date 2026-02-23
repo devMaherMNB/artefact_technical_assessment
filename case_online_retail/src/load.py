@@ -8,6 +8,8 @@ load_dotenv()
 logger = get_logger("Online Retail")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+# Using a class (RetailLoader) instead of standalone functions provides single responsibility: 
+# each dim loader is independently testable and retryable on failure.
 class RetailLoader:
     def __init__(self, engine):
         self.engine = engine
@@ -30,7 +32,8 @@ class RetailLoader:
             'is_weekend': dates.dayofweek >= 5
         })
 
-        # Use engine.begin() for cross-version transaction support
+        # Using row-by-row INSERT with ON CONFLICT DO NOTHING for dim_date ensures upsert semantics: 
+        # prevents duplicates on reruns without failing (pandas to_sql has no conflict handling).
         with self.engine.begin() as conn:
             for _, row in dim_date_df.iterrows():
                 insert_stmt = text("""
@@ -45,6 +48,8 @@ class RetailLoader:
 
     def load_dim_products(self, df_products):
         logger.info("Loading dim_products...")
+        # ON CONFLICT DO UPDATE: Products can change description over time.
+        # NOTHING would silently keep stale data in the dimension.
         with self.engine.begin() as conn:
             for _, row in df_products.iterrows():
                 insert_stmt = text("""
@@ -75,7 +80,8 @@ class RetailLoader:
         # Get mapping from dim_customers
         dim_customers = pd.read_sql("SELECT customer_id, raw_customer_id FROM dw_online_retail.dim_customers", self.engine)
         
-        # Merge with df_facts
+        # Using how='left' for merge: 'inner' would silently drop fact rows if a natural key 
+        # failed to load into a dim; left join + subsequent null check makes data loss visible.
         df_enriched = df_facts.merge(dim_products, on='stock_code', how='left')
         df_enriched = df_enriched.merge(dim_customers, on='raw_customer_id', how='left')
         
@@ -87,6 +93,8 @@ class RetailLoader:
 
     def load_fact_sales(self, df_facts_enriched):
         logger.info("Loading fact_sales...")
+        # Using chunksize=1000 on fact_sales: Inserting 534k rows at once risks memory pressure 
+        # and transaction timeouts. 1,000-row chunks are recoverable and observable.
         df_facts_enriched.to_sql(
             'fact_sales', 
             self.engine, 
