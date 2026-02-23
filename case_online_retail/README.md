@@ -120,3 +120,4 @@ Summary:
 - Add PII masking for customer_id values before loading to Gold layer
 - Replace chunked INSERT in load.py with PostgreSQL COPY command for faster fact loading
 - Wire monitor.py alerts to Slack webhook or email via smtplib for production alerting
+- Add materialized views for caching and versioning wired as a 5th DAG 

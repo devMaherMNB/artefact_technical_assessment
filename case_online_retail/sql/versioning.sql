@@ -5,7 +5,9 @@
 -- Rationale: Captures full state of staging data per pipeline run.
 --            Simpler than SCD Type 2 (no schema changes to dims).
 --            DATE key enforces one snapshot per day — idempotent.
--- ============================================================
+-- ===========================================================
+
+-- IMPLEMENTATION IN AIRFLOW DAG
 
 CREATE SCHEMA IF NOT EXISTS staging_online_retail;
 
