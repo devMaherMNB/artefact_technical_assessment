@@ -89,23 +89,23 @@ docker-compose exec app pytest -p no:postgresql case_online_retail/tests/ -v
 
 ## File Structure
 
-case_online_retail/
-├── README.md                    ← overview, how to run, architecture
-├── dags/
-│   └── retail_etl_dag.py        ← Airflow DAG (5 tasks)
-├── metadata/
-│   └── data_catalog.json        ← Bronze/Silver/Gold documentation
-├── sql/
-│   ├── schema.sql               ← all 3 schemas + tables + indexes
-│   ├── analytical_queries.sql   ← 5 business queries
-│   ├── partitioning.sql         ← partitioning design + DDL reference
-│   └── versioning.sql           ← snapshot strategy + INSERT
-├── src/
-│   ├── ingest.py                ← CSV → staging (Bronze)
-│   ├── transform.py             ← staging → Silver (clean + write)
-│   ├── load.py                  ← Silver → Gold (surrogate keys + DW)
-│   └── monitor.py               ← DQ checks + alerts
-└── tests/
+case_online_retail/  
+├── README.md                    ← overview, how to run, architecture  
+├── dags/  
+│   └── retail_etl_dag.py        ← Airflow DAG (5 tasks)  
+├── metadata/  
+│   └── data_catalog.json        ← Bronze/Silver/Gold documentation  
+├── sql/  
+│   ├── schema.sql               ← all 3 schemas + tables + indexes  
+│   ├── analytical_queries.sql   ← 5 business queries  
+│   ├── partitioning.sql         ← partitioning design + DDL reference  
+│   └── versioning.sql           ← snapshot strategy + INSERT  
+├── src/  
+│   ├── ingest.py                ← CSV → staging (Bronze)  
+│   ├── transform.py             ← staging → Silver (clean + write)  
+│   ├── load.py                  ← Silver → Gold (surrogate keys + DW)  
+│   └── monitor.py               ← DQ checks  
+└── tests/  
     └── test_online_retail.py    ← 5 unit tests (no DB required)
 
 ## Data Quality Summary

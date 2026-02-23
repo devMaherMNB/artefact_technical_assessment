@@ -97,7 +97,6 @@ def run_transform():
     # Write cleaned DataFrames to Silver layer
     write_to_silver(df_products, df_customers, df_facts, engine)
 
-    return df_products, df_customers, df_facts
     
 if __name__ == '__main__':
     run_transform()

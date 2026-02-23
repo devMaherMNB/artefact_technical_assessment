@@ -42,8 +42,7 @@ def run_snapshot():
                 snapshot_date   DATE NOT NULL DEFAULT CURRENT_DATE
             )
         """))
-
-        
+ 
         # Delete today's snapshot if it exists to ensure idempotency on reruns
         conn.execute(text("DELETE FROM staging_online_retail.raw_transactions_archive WHERE snapshot_date = CURRENT_DATE"))
         conn.execute(text("""
