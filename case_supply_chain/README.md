@@ -58,27 +58,32 @@ case_supply_chain/
 
 ## How to Run
 
-**1. Start the database**
+**1. Start postgres and app containers**
 ```bash
-docker-compose up -d postgres
+docker-compose up -d postgres app
 ```
 
-**2. Create schema**
+**2. Install dependencies**
+```bash
+docker-compose exec app pip install -r requirements.txt
+```
+
+**3. Create schema**
 ```bash
 docker-compose exec app python case_supply_chain/src/setup_schema.py
 ```
 
-**3. Generate and load synthetic data**
+**4. Generate and load synthetic data**
 ```bash
 docker-compose exec app python case_supply_chain/src/data_generator.py
 ```
 
-**4. Run advanced SQL (stored procedure, view, trigger)**
+**5. Run advanced SQL (stored procedure, view, trigger)**
 ```bash
 docker-compose exec postgres psql -U admin -d assessment_dw -f /app/case_supply_chain/sql/advanced.sql
 ```
 
-**5. Run tests**
+**6. Run tests**
 ```bash
 docker-compose exec app pytest case_supply_chain/tests/ -v
 ```

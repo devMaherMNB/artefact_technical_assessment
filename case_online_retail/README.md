@@ -1,6 +1,7 @@
 # Online Retail Sales — Data Engineering Pipeline
 
 ## Overview
+
 An end-to-end data engineering pipeline built on the UCI Online Retail dataset (~541k transactions).
 The pipeline ingests raw CSV data, cleans and validates it through a medallion architecture, and loads
 it into a star schema data warehouse optimised for analytical queries. Orchestration is handled by
@@ -37,28 +38,37 @@ Apache Airflow, with all services containerised via Docker Compose.
 
 ## Tech Stack
 
-| Layer | Tool |
-|---|---|
-| Language | Python 3.11 |
-| Data processing | Pandas, SQLAlchemy |
-| Database | PostgreSQL 15 |
-| Orchestration | Apache Airflow 2.7.1 |
-| Containerisation | Docker Compose |
+
+| Layer            | Tool                 |
+| ---------------- | -------------------- |
+| Language         | Python 3.11          |
+| Data processing  | Pandas, SQLAlchemy   |
+| Database         | PostgreSQL 15        |
+| Orchestration    | Apache Airflow 2.7.1 |
+| Containerisation | Docker Compose       |
+
 
 ## How to Run
+
 ### Prerequisites
+
 - Docker Desktop running
 
 ### Setup
+
 ```powershell
 # 1. Start infrastructure
 docker-compose up -d
 
-# 2. Initialize database schema
+# 2. Install dependencies
+docker-compose exec app pip install -r requirements.txt
+
+# 3. Initialize database schema
 Get-Content case_online_retail/sql/schema.sql | docker exec -i artefact_assessment-postgres-1 psql -U admin -d assessment_dw
 ```
 
 ### Run Pipeline (Manual)
+
 ```powershell
 docker-compose exec app python case_online_retail/src/ingest.py
 docker-compose exec app python case_online_retail/src/transform.py
@@ -67,20 +77,23 @@ docker-compose exec app python case_online_retail/src/monitor.py
 ```
 
 ### Run via Airflow (Scheduled)
+
 - **Airflow UI:** available at `http://localhost:8080` (Credentials: `admin` / `admin`)
 - **DAG:** `retail_etl_dag` — runs `@daily`
 - **To trigger manually:** Unpause the DAG and click "Trigger DAG"
 
 ### Run Tests
+
 ```powershell
 docker-compose exec app pytest -p no:postgresql case_online_retail/tests/ -v
 ```
 
 ## File Structure
+
 case_online_retail/
 ├── README.md                    ← overview, how to run, architecture
 ├── dags/
-│   └── retail_etl_dag.py        ← Airflow DAG (4 tasks)
+│   └── retail_etl_dag.py        ← Airflow DAG (5 tasks)
 ├── metadata/
 │   └── data_catalog.json        ← Bronze/Silver/Gold documentation
 ├── sql/
@@ -97,12 +110,14 @@ case_online_retail/
     └── test_online_retail.py    ← 5 unit tests (no DB required)
 
 ## Data Quality Summary
+
 - **Raw Rows:** 541,909
 - **Duplicates Dropped:** 5,268
 - **Nulls Handled:** 135,037 (customer_id), 1,454 (description)
 - **Loaded to Warehouse:** 534,125
 
 ## Design Decisions
+
 Full design rationale is documented in the data catalog and inline code comments.
 
 Summary:
@@ -113,6 +128,7 @@ Summary:
 - **Exact deduplication only** — drop_duplicates() on all columns drops 5,268 true duplicates; logical duplicates (same invoice + product) are intentionally kept as valid repeat line items
 
 ## Further Improvements
+
 - Add indexes on Silver layer tables to speed up pd.read_sql() queries in load.py
 - Implement SCD Type 2 on dim_products to track historical price changes per product
 - Integrate Great Expectations or dbt tests for declarative data quality validation
@@ -120,4 +136,5 @@ Summary:
 - Add PII masking for customer_id values before loading to Gold layer
 - Replace chunked INSERT in load.py with PostgreSQL COPY command for faster fact loading
 - Wire monitor.py alerts to Slack webhook or email via smtplib for production alerting
-- Add materialized views for caching and versioning wired as a 5th DAG 
+- Add materialized views for caching and versioning wired as a DAG Task
+
