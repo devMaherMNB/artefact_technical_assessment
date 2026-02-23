@@ -4,9 +4,9 @@ from faker import Faker
 from sqlalchemy import text
 from datetime import datetime, timedelta, date
 from common.db_config import engine
-import common.logger as logger  # This triggers the basicConfig in common/logger.py
+from common.logger import get_logger  # This triggers the basicConfig in common/logger.py
 
-logger = logger.getLogger("Supply Chain")
+logger = get_logger("Supply Chain")
 
 fake = Faker()
 

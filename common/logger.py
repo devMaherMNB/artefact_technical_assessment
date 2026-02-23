@@ -8,5 +8,5 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)]
 )
 
-def getLogger(name):
+def get_logger(name):
     return logging.getLogger(name)

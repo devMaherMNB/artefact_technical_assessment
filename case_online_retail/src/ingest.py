@@ -10,7 +10,7 @@ from common.logger import get_logger
 load_dotenv()
 logger = get_logger("Online Retail")  # for logging
 
-DATA_PATH = os.getenv('DATA_PATH', 'archive/online_retail.csv')
+DATA_PATH = os.getenv('DATA_PATH', 'case_online_retail/archive/online_retail.csv')
 DATABASE_URL = os.getenv('DATABASE_URL')
 
 def run_ingest():

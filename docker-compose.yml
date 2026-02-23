@@ -13,6 +13,7 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       PYTHONPATH: /app
+      DATA_PATH: /app/case_online_retail/archive/online_retail.csv
     depends_on:
       postgres:
         condition: service_healthy
@@ -29,7 +30,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
-      - ./case_online_retail/sql/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+      - .:/app
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U admin -d assessment_dw"]
       interval: 5s
@@ -51,6 +52,10 @@ services:
     environment:
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://admin:admin@postgres:5432/airflow
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__WEBSERVER__SECRET_KEY=static_secret_key_for_assessment
+      - PYTHONPATH=/opt/airflow/project
+    volumes:
+      - .:/opt/airflow/project
     depends_on:
       - postgres
     command: >
@@ -66,12 +71,15 @@ services:
     environment:
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://admin:admin@postgres:5432/airflow
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__WEBSERVER__SECRET_KEY=static_secret_key_for_assessment
+      - PYTHONPATH=/opt/airflow/project
+      - DATABASE_URL=postgresql://admin:admin@postgres:5432/assessment_dw
+      - DATA_PATH=/opt/airflow/project/case_online_retail/archive/online_retail.csv
     ports:
       - "8080:8080"
     volumes:
+      - .:/opt/airflow/project
       - ./case_online_retail/dags:/opt/airflow/dags
-      - ./case_online_retail/src:/opt/airflow/src
-      - ./common:/opt/airflow/common
     command: webserver
 
   airflow-scheduler:
@@ -83,10 +91,13 @@ services:
     environment:
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://admin:admin@postgres:5432/airflow
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__WEBSERVER__SECRET_KEY=static_secret_key_for_assessment
+      - PYTHONPATH=/opt/airflow/project
+      - DATABASE_URL=postgresql://admin:admin@postgres:5432/assessment_dw
+      - DATA_PATH=/opt/airflow/project/case_online_retail/archive/online_retail.csv
     volumes:
+      - .:/opt/airflow/project
       - ./case_online_retail/dags:/opt/airflow/dags
-      - ./case_online_retail/src:/opt/airflow/src
-      - ./common:/opt/airflow/common
     command: scheduler
 
 volumes:

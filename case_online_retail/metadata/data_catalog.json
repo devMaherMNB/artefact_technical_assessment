@@ -10,7 +10,7 @@
         "id": "src_001",
         "name": "UCI Online Retail Dataset",
         "type": "CSV",
-        "path": "archive/online_retail.csv",
+        "path": "case_online_retail/archive/online_retail.csv",
         "encoding": "ISO-8859-1",
         "rows": 541909,
         "columns": 8,

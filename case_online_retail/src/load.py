@@ -30,7 +30,8 @@ class RetailLoader:
             'is_weekend': dates.dayofweek >= 5
         })
 
-        with self.engine.connect() as conn:
+        # Use engine.begin() for cross-version transaction support
+        with self.engine.begin() as conn:
             for _, row in dim_date_df.iterrows():
                 insert_stmt = text("""
                     INSERT INTO dw_online_retail.dim_date (
@@ -40,12 +41,11 @@ class RetailLoader:
                     ) ON CONFLICT (date_id) DO NOTHING;
                 """)
                 conn.execute(insert_stmt, row.to_dict())
-            conn.commit()
         logger.info(f"Loaded {len(dim_date_df)} dates into dim_date")
 
     def load_dim_products(self, df_products):
         logger.info("Loading dim_products...")
-        with self.engine.connect() as conn:
+        with self.engine.begin() as conn:
             for _, row in df_products.iterrows():
                 insert_stmt = text("""
                     INSERT INTO dw_online_retail.dim_products (stock_code, description)
@@ -53,12 +53,11 @@ class RetailLoader:
                     ON CONFLICT (stock_code) DO UPDATE SET description = EXCLUDED.description;
                 """)
                 conn.execute(insert_stmt, row.to_dict())
-            conn.commit()
         logger.info(f"Loaded {len(df_products)} products into dim_products")
 
     def load_dim_customers(self, df_customers):
         logger.info("Loading dim_customers...")
-        with self.engine.connect() as conn:
+        with self.engine.begin() as conn:
             for _, row in df_customers.iterrows():
                 insert_stmt = text("""
                     INSERT INTO dw_online_retail.dim_customers (raw_customer_id, country)
@@ -66,7 +65,6 @@ class RetailLoader:
                     ON CONFLICT (raw_customer_id) DO UPDATE SET country = EXCLUDED.country;
                 """)
                 conn.execute(insert_stmt, row.to_dict())
-            conn.commit()
         logger.info(f"Loaded {len(df_customers)} customers into dim_customers")
 
     def resolve_surrogate_keys(self, df_facts):
@@ -114,7 +112,6 @@ class RetailLoader:
 
 def run_load():
     engine = create_engine(DATABASE_URL)
-    logger.info("connected to the database")
     loader = RetailLoader(engine)
     loader.run_load()
 
