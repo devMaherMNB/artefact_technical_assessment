@@ -53,6 +53,11 @@ Apache Airflow, with all services containerised via Docker Compose.
 ### Prerequisites
 
 - Docker Desktop running
+- Copy `.env.example` to `.env` in the project root (required for manual script runs and tests):
+```powershell
+Copy-Item .env.example .env
+```
+> The default values match `docker-compose.yml` — no edits needed for local Docker setup.
 
 ### Setup
 

@@ -58,6 +58,14 @@ case_supply_chain/
 
 ## How to Run
 
+**0. Set up environment**
+
+Copy `.env.example` to `.env` in the project root (required for Python scripts and tests):
+```bash
+cp .env.example .env
+```
+> The default values match `docker-compose.yml` — no edits needed for local Docker setup.
+
 **1. Start postgres and app containers**
 ```bash
 docker-compose up -d postgres app
