@@ -7,43 +7,55 @@ load_dotenv()
 logger = get_logger("Online Retail Monitor")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+# Known baseline from the UCI dataset.
+# Bronze → Silver expects ~7k row loss (dedup + bad price filter).
+# Silver → Gold expects ~0 loss — load.py only resolves surrogate keys, no filtering.
+EXPECTED_MIN_ROWS = 500000
+MAX_SILVER_TO_GOLD_LOSS = 1000
+
 def run_monitor():
     engine = create_engine(DATABASE_URL)
     logger.info("Starting Data Quality Monitor...")
 
     with engine.connect() as conn:
-        fact_count = conn.execute(text("SELECT COUNT(*) FROM dw_online_retail.fact_sales")).scalar()
-        logger.info(f"DQ Check: Total rows in fact_sales = {fact_count}")
-        
-        if fact_count == 0:
+
+        # --- Bronze → Silver → Gold row count pipeline audit ---
+        # Validates the full pipeline in one shot by tracking row counts across all three layers.
+        # Any unexpected drop between layers indicates a failure in that stage.
+        bronze_count = conn.execute(text(
+            "SELECT COUNT(*) FROM staging_online_retail.raw_transactions"
+        )).scalar()
+
+        silver_count = conn.execute(text(
+            "SELECT COUNT(*) FROM silver_online_retail.transactions"
+        )).scalar()
+
+        gold_count = conn.execute(text(
+            "SELECT COUNT(*) FROM dw_online_retail.fact_sales"
+        )).scalar()
+
+        bronze_to_silver_loss = bronze_count - silver_count
+        silver_to_gold_loss = silver_count - gold_count
+
+        logger.info(f"Pipeline audit — Bronze: {bronze_count} | Silver: {silver_count} | Gold: {gold_count}")
+        logger.info(f"Bronze → Silver loss = {bronze_to_silver_loss} rows (dedup + bad price filter, expected ~7k)")
+        logger.info(f"Silver → Gold loss   = {silver_to_gold_loss} rows (expected ~0)")
+
+        if bronze_count < EXPECTED_MIN_ROWS:
+            logger.error(f"ANOMALY: Bronze has {bronze_count} rows — below {EXPECTED_MIN_ROWS}. Incomplete ingest suspected.")
+
+        if gold_count == 0:
             logger.error("ANOMALY: fact_sales is empty. Pipeline failure suspected.")
 
-        null_value_count = conn.execute(text("SELECT COUNT(*) FROM dw_online_retail.fact_sales WHERE total_value IS NULL")).scalar()
-        if null_value_count > 0:
-            logger.warning(f"WARNING: Found {null_value_count} rows with NULL total_value. Calculation error likely.")
+        if bronze_to_silver_loss < 0:
+            logger.error(f"ANOMALY: Silver has MORE rows than Bronze. Data integrity issue.")
+
+        if silver_to_gold_loss > MAX_SILVER_TO_GOLD_LOSS:
+            logger.warning(f"WARNING: {silver_to_gold_loss} rows lost between Silver and Gold. Surrogate key resolution may have failed.")
+        elif silver_to_gold_loss < 0:
+            logger.error(f"ANOMALY: Gold has MORE rows than Silver. Duplicate load suspected.")
         else:
-            logger.info("DQ Check: No NULL total_values found.")
-
-        negative_count = conn.execute(text("SELECT COUNT(*) FROM dw_online_retail.fact_sales WHERE total_value < 0")).scalar()
-        logger.info(f"DQ Check: Total rows with negative total_value (returns) = {negative_count}")
-
-        date_range = conn.execute(text("SELECT MIN(date_id), MAX(date_id) FROM dw_online_retail.fact_sales")).fetchone()
-        min_date, max_date = date_range
-        logger.info(f"DQ Check: Date range found: {min_date} to {max_date}")
-        
-        if min_date and min_date < 20100000:
-            logger.warning(f"WARNING: Unexpectedly old date detected ({min_date}).")
-        if max_date and max_date > 20261231: 
-            logger.warning(f"WARNING: Future date detected ({max_date}). Check casting logic.")
-
-        staging_count = conn.execute(text("SELECT COUNT(*) FROM staging_online_retail.raw_transactions")).scalar()
-        gap = staging_count - fact_count
-        logger.info(f"DQ Check: Staging count: {staging_count}, Warehouse count: {fact_count}, Gap: {gap}")
-        
-        if gap > 0:
-            logger.info(f"Information: {gap} rows filtered during transformation (expected due to DQ rules).")
-        elif gap < 0:
-            logger.error(f"ANOMALY: Warehouse has more rows than staging ({gap}). Integrity issue.")
+            logger.info("Pipeline audit passed — row counts within expected bounds.")
 
 if __name__ == "__main__":
     run_monitor()

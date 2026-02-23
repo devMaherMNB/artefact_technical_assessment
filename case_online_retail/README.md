@@ -62,10 +62,9 @@ docker-compose up -d
 
 # 2. Install dependencies
 docker-compose exec app pip install -r requirements.txt
-
-# 3. Initialize database schema
-Get-Content case_online_retail/sql/schema.sql | docker exec -i artefact_assessment-postgres-1 psql -U admin -d assessment_dw
 ```
+
+> Schema is initialised automatically on the first DAG run — no manual SQL step required.
 
 ### Run Pipeline (Manual)
 

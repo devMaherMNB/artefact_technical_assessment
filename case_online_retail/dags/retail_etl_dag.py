@@ -7,6 +7,22 @@ from case_online_retail.src.transform import run_transform
 from case_online_retail.src.load import run_load
 from case_online_retail.src.monitor import run_monitor
 import os
+import logging
+
+def on_failure_alert(context):
+    """
+    Called automatically by Airflow when any task in this DAG fails.
+    Logs a structured alert with task and DAG context.
+    In production, replace logger with a Slack webhook or smtplib email call.
+    """
+    dag_id = context.get("dag").dag_id
+    task_id = context.get("task_instance").task_id
+    execution_date = context.get("execution_date")
+    log_url = context.get("task_instance").log_url
+    logging.error(
+        f"PIPELINE FAILURE | DAG: {dag_id} | Task: {task_id} | "
+        f"Date: {execution_date} | Logs: {log_url}"
+    )
 
 def run_snapshot():
     """
@@ -19,7 +35,6 @@ def run_snapshot():
     load_dotenv()
     engine = create_engine(os.getenv("DATABASE_URL"))
     with engine.begin() as conn:
-        logger.info("Creating raw_transactions_archive table if it doesn't exist")
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS staging_online_retail.raw_transactions_archive (
                 LIKE staging_online_retail.raw_transactions INCLUDING ALL,
@@ -28,7 +43,7 @@ def run_snapshot():
             )
         """))
 
-        logger.info("Deleting today's snapshot if it exists to ensure idempotency on reruns")
+        
         # Delete today's snapshot if it exists to ensure idempotency on reruns
         conn.execute(text("DELETE FROM staging_online_retail.raw_transactions_archive WHERE snapshot_date = CURRENT_DATE"))
         conn.execute(text("""
@@ -37,12 +52,15 @@ def run_snapshot():
             FROM staging_online_retail.raw_transactions
         """))
 
-with DAG(   
+with DAG(
     dag_id='retail_etl_dag',
-    schedule_interval= '@daily',
+    schedule_interval='@daily',
     start_date=datetime(2026, 2, 22),
     catchup=False,
-    tags=['retail_etl']
+    tags=['retail_etl'],
+    # on_failure_callback fires on any task failure — structured alert with task context.
+    # Production: replace logging.error with Slack webhook or smtplib email.
+    on_failure_callback=on_failure_alert,
 ) as dag:
     
     ingest = PythonOperator(

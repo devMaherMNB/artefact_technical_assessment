@@ -12,7 +12,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 # acceptable to drop and recreate on each run as it's not queried by analysts directly.
 def write_to_silver(df_products, df_customers, df_facts, engine):
     logger.info("Writing cleaned DataFrames to Silver Layer...")
-    
+
     # Write to products
     df_products.to_sql(
         'products', engine, schema='silver_online_retail', 

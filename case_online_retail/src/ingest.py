@@ -1,6 +1,7 @@
 import pandas as pd
 import os
 import uuid
+import pathlib
 from datetime import datetime
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
@@ -8,13 +9,22 @@ from dotenv import load_dotenv
 from common.logger import get_logger
 
 load_dotenv()
-logger = get_logger("Online Retail")  # for logging
+logger = get_logger("Online Retail")
 
 DATA_PATH = os.getenv('DATA_PATH', 'case_online_retail/archive/online_retail.csv')
 DATABASE_URL = os.getenv('DATABASE_URL')
 
+SCHEMA_FILE = pathlib.Path(__file__).resolve().parents[1] / "sql" / "schema.sql"
+
 def run_ingest():
     logger.info("Starting ingestion...")
+
+    # Run schema.sql first — creates all schemas and tables if they don't exist.
+    # Using IF NOT EXISTS throughout so this is safe and idempotent on every run.
+    engine = create_engine(DATABASE_URL)
+    with engine.begin() as conn:
+        conn.execute(text(SCHEMA_FILE.read_text()))
+    logger.info("Schema initialised")
 
     df = pd.read_csv(DATA_PATH, encoding='ISO-8859-1') # the encoding is required for special characters
     logger.info(f"Loaded {len(df)} rows from {DATA_PATH}")
@@ -36,26 +46,6 @@ def run_ingest():
     })
 
 
-    engine = create_engine(DATABASE_URL)
-    
-    # Ensure schema and table exist before doing anything
-    with engine.begin() as conn:
-        conn.execute(text("CREATE SCHEMA IF NOT EXISTS staging_online_retail"))
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS staging_online_retail.raw_transactions (
-                invoice_no      VARCHAR(20),
-                stock_code      VARCHAR(20),
-                description     VARCHAR(255),
-                quantity        INTEGER,
-                invoice_date    VARCHAR(50),
-                unit_price      NUMERIC(10,2),
-                customer_id     VARCHAR(20),
-                country         VARCHAR(100),
-                load_timestamp  TIMESTAMP DEFAULT NOW(),
-                batch_id        UUID DEFAULT gen_random_uuid()
-            )
-        """))
-    
     # TRUNCATE before load ensures idempotency: it's faster than DELETE and resets no identity.
     # Every run starts with a clean slate in the staging area.
     with engine.begin() as conn:
