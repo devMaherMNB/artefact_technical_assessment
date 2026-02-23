@@ -1,0 +1,122 @@
+{
+    "catalog_version": "1.0",
+    "last_updated": "2026-02-22",
+    "project": "Online Retail Sales Data Engineering",
+    "owner": "Maher Banshi",
+    "description": "Metadata catalog for the Online Retail ETL pipeline. Documents data sources, schemas, lineage, and quality metrics.",
+  
+    "data_sources": [
+      {
+        "id": "src_001",
+        "name": "UCI Online Retail Dataset",
+        "type": "CSV",
+        "path": "archive/online_retail.csv",
+        "encoding": "ISO-8859-1",
+        "rows": 541909,
+        "columns": 8,
+        "description": "Real UK e-commerce transactions from 2010-2011. Contains invoices, products, customers, and countries.",
+        "fields": [
+          {"name": "InvoiceNo",   "type": "VARCHAR", "nullable": false, "notes": "Invoice identifier — prefix 'C' indicates cancellation"},
+          {"name": "StockCode",   "type": "VARCHAR", "nullable": false, "notes": "Product identifier — some non-product codes exist (POST, DOT)"},
+          {"name": "Description", "type": "VARCHAR", "nullable": true,  "notes": "~1,454 nulls/empty — filled with NO DESCRIPTION sentinel"},
+          {"name": "Quantity",    "type": "INTEGER", "nullable": false,  "notes": "Negative values = returns — kept as valid business events"},
+          {"name": "InvoiceDate", "type": "VARCHAR", "nullable": false,  "notes": "String in source — cast to TIMESTAMP in transform"},
+          {"name": "UnitPrice",   "type": "NUMERIC", "nullable": false,  "notes": "Values <= 0 filtered out as data errors"},
+          {"name": "CustomerID",  "type": "VARCHAR", "nullable": true,   "notes": "~135,037 nulls — filled with UNKNOWN sentinel"},
+          {"name": "Country",     "type": "VARCHAR", "nullable": false,  "notes": "38 distinct countries"}
+        ]
+      }
+    ],
+  
+    "schemas": [
+      {
+        "name": "staging_online_retail",
+        "layer": "Bronze",
+        "description": "Raw landing zone — exact copy of source data with pipeline metadata appended",
+        "tables": [
+          {
+            "name": "raw_transactions",
+            "rows_last_load": 541909,
+            "load_strategy": "TRUNCATE and reload — idempotent",
+            "columns_added": ["load_timestamp", "batch_id"]
+          },
+          {
+            "name": "raw_transactions_archive",
+            "description": "Daily snapshot for versioning and audit trail",
+            "partition_key": "snapshot_date",
+            "strategy": "One snapshot per day — DATE key enforces idempotency"
+          }
+        ]
+      },
+      {
+        "name": "dw_online_retail",
+        "layer": "Gold",
+        "description": "Star schema data warehouse — cleaned, transformed, and optimized for analytics",
+        "tables": [
+          {
+            "name": "dim_customers",
+            "type": "Dimension",
+            "rows": 4372,
+            "natural_key": "raw_customer_id",
+            "surrogate_key": "customer_id (SERIAL)",
+            "notes": "Includes UNKNOWN sentinel for anonymous transactions"
+          },
+          {
+            "name": "dim_products",
+            "type": "Dimension",
+            "rows": 3937,
+            "natural_key": "stock_code",
+            "surrogate_key": "product_id (SERIAL)",
+            "notes": "unit_price not stored here — captured on fact at time of sale"
+          },
+          {
+            "name": "dim_date",
+            "type": "Dimension",
+            "rows": 305,
+            "natural_key": "full_date",
+            "surrogate_key": "date_id (YYYYMMDD integer)",
+            "notes": "Human-readable integer key — naturally sortable without joins"
+          },
+          {
+            "name": "fact_sales",
+            "type": "Fact",
+            "rows": 534125,
+            "grain": "One row per invoice line (invoice_no + stock_code)",
+            "indexes": ["date_id", "product_id", "customer_id", "invoice_no"],
+            "notes": "total_value pre-computed as quantity * unit_price"
+          }
+        ]
+      }
+    ],
+  
+    "lineage": {
+      "description": "End-to-end data flow",
+      "steps": [
+        {"step": 1, "from": "archive/online_retail.csv", "to": "staging_online_retail.raw_transactions", "script": "src/ingest.py"},
+        {"step": 2, "from": "staging_online_retail.raw_transactions", "to": "staging_online_retail.raw_transactions_archive", "script": "sql/versioning.sql (snapshot)"},
+        {"step": 3, "from": "staging_online_retail.raw_transactions", "to": "silver_online_retail.products + silver_online_retail.customers + silver_online_retail.transactions", "script": "src/transform.py"},
+        {"step": 4, "from": "silver_online_retail.products + silver_online_retail.customers + silver_online_retail.transactions", "to": "dw_online_retail.dim_* + fact_sales", "script": "src/load.py"},
+        {"step": 5, "from": "dw_online_retail.fact_sales", "to": "monitor logs + alerts", "script": "src/monitor.py"}
+      ]
+    },
+  
+    "data_quality_summary": {
+      "last_run": "2026-02-22",
+      "raw_rows": 541909,
+      "exact_duplicates_dropped": 5268,
+      "missing_customer_id_filled": 135037,
+      "missing_description_filled": 1454,
+      "invalid_prices_filtered": 2516,
+      "clean_rows_loaded": 534125,
+      "pipeline_runtime_seconds": 120
+    },
+  
+    "pipeline": {
+      "orchestrator": "Apache Airflow",
+      "dag_id": "retail_etl_dag",
+      "schedule": "@daily",
+      "dag_file": "dags/retail_etl_dag.py",
+      "deployment": "Local: Docker Compose | Production: AWS MWAA"
+    }
+  }
+  

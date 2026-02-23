@@ -13,24 +13,32 @@ CREATE TABLE IF NOT EXISTS staging_online_retail.raw_transactions (
     batch_id        UUID DEFAULT gen_random_uuid()
 );
 
-CREATE TABLE IF NOT EXISTS staging_online_retail.raw_transactions_archive (
-    invoice_no      VARCHAR(20),
-    stock_code      VARCHAR(20),
-    description     VARCHAR(255),
-    quantity        INTEGER,
-    invoice_date    VARCHAR(50),
-    unit_price      NUMERIC(10,2),
-    customer_id     VARCHAR(20),
-    country         VARCHAR(100),
-    load_timestamp  TIMESTAMP DEFAULT NOW(),
-    batch_id        UUID DEFAULT gen_random_uuid(),
-    snapshot_id     UUID NOT NULL,
-    snapshot_date   DATE NOT NULL
+-- Silver Layer (Cleaned Data, Natural Keys)
+CREATE SCHEMA IF NOT EXISTS silver_online_retail;
+
+CREATE TABLE IF NOT EXISTS silver_online_retail.products (
+    stock_code      VARCHAR(20) PRIMARY KEY,
+    description     VARCHAR(255)
 );
 
+CREATE TABLE IF NOT EXISTS silver_online_retail.customers (
+    raw_customer_id VARCHAR(20) PRIMARY KEY, 
+    country         VARCHAR(100)
+);
+
+CREATE TABLE IF NOT EXISTS silver_online_retail.transactions (
+    invoice_no      VARCHAR(20),
+    stock_code      VARCHAR(20),
+    raw_customer_id VARCHAR(20),
+    date_id         INT,
+    quantity        INTEGER,
+    unit_price      NUMERIC(10,2),
+    total_value     NUMERIC(12,2)
+);
+
+-- DW Layer (Star Schema, Surrogate Keys)
 CREATE SCHEMA IF NOT EXISTS dw_online_retail;
 
--- Dimension Tables First
 CREATE TABLE IF NOT EXISTS dw_online_retail.dim_customers (
     customer_id     SERIAL PRIMARY KEY,
     raw_customer_id VARCHAR(20) UNIQUE, 
@@ -56,7 +64,6 @@ CREATE TABLE IF NOT EXISTS dw_online_retail.dim_date (
     is_weekend BOOLEAN NOT NULL
 );
 
--- Fact Table
 CREATE TABLE IF NOT EXISTS dw_online_retail.fact_sales (
     sales_id        SERIAL PRIMARY KEY,
     invoice_no      VARCHAR(20),

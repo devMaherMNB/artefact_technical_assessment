@@ -3,7 +3,6 @@ from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
 import os
 from common.logger import get_logger
-from case_online_retail.src.transform import run_transform
 
 load_dotenv()
 logger = get_logger("Online Retail")
@@ -32,7 +31,7 @@ class RetailLoader:
         })
 
         with self.engine.connect() as conn:
-            for _, row in dim_date_df.iterrows(): # too slow
+            for _, row in dim_date_df.iterrows():
                 insert_stmt = text("""
                     INSERT INTO dw_online_retail.dim_date (
                         date_id, full_date, year, quarter, month, month_name, week, day_of_week, day_name, is_weekend
@@ -47,7 +46,7 @@ class RetailLoader:
     def load_dim_products(self, df_products):
         logger.info("Loading dim_products...")
         with self.engine.connect() as conn:
-            for _, row in df_products.iterrows(): # too slow
+            for _, row in df_products.iterrows():
                 insert_stmt = text("""
                     INSERT INTO dw_online_retail.dim_products (stock_code, description)
                     VALUES (:stock_code, :description)
@@ -60,7 +59,7 @@ class RetailLoader:
     def load_dim_customers(self, df_customers):
         logger.info("Loading dim_customers...")
         with self.engine.connect() as conn:
-            for _, row in df_customers.iterrows(): # too slow
+            for _, row in df_customers.iterrows():
                 insert_stmt = text("""
                     INSERT INTO dw_online_retail.dim_customers (raw_customer_id, country)
                     VALUES (:raw_customer_id, :country)
@@ -101,18 +100,23 @@ class RetailLoader:
         )
         logger.info(f"Loaded {len(df_facts_enriched)} facts into fact_sales")
 
-    def run_load(self, df_products, df_customers, df_facts):
+    def run_load(self):
+        logger.info("Reading DataFrames from Silver Layer...")
+        df_products = pd.read_sql("SELECT * FROM silver_online_retail.products", self.engine)
+        df_customers = pd.read_sql("SELECT * FROM silver_online_retail.customers", self.engine)
+        df_facts = pd.read_sql("SELECT * FROM silver_online_retail.transactions", self.engine)
+
         self.load_dim_date(df_facts)
         self.load_dim_products(df_products)
         self.load_dim_customers(df_customers)
         df_facts_enriched = self.resolve_surrogate_keys(df_facts)
         self.load_fact_sales(df_facts_enriched)
 
-def run_load(df_products, df_customers, df_facts):
+def run_load():
     engine = create_engine(DATABASE_URL)
+    logger.info("connected to the database")
     loader = RetailLoader(engine)
-    loader.run_load(df_products, df_customers, df_facts)
+    loader.run_load()
 
 if __name__ == '__main__':
-    df_products, df_customers, df_facts = run_transform()
-    run_load(df_products, df_customers, df_facts)
+    run_load()

@@ -8,6 +8,28 @@ load_dotenv()
 logger = get_logger("Online Retail")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+def write_to_silver(df_products, df_customers, df_facts, engine):
+    logger.info("Writing cleaned DataFrames to Silver Layer...")
+    
+    # Write to products
+    df_products.to_sql(
+        'products', engine, schema='silver_online_retail', 
+        if_exists='replace', index=False
+    )
+    
+    # Write to customers
+    df_customers.to_sql(
+        'customers', engine, schema='silver_online_retail', 
+        if_exists='replace', index=False
+    )
+    
+    # Write to transactions (facts with natural keys)
+    df_facts.to_sql(
+        'transactions', engine, schema='silver_online_retail', 
+        if_exists='replace', index=False
+    )
+    logger.info("Silver Layer load completed successfully.")
+
 def run_transform():
     logger.info("Starting transformation process")
     engine = create_engine(DATABASE_URL)
@@ -62,9 +84,11 @@ def run_transform():
     # building dimension tables
     df_products = df[['stock_code', 'description']].drop_duplicates(subset=['stock_code'])
     df_customers = df[['customer_id', 'country']].drop_duplicates(subset=['customer_id']).rename(columns={'customer_id': 'raw_customer_id'})
+    # renamed customer_id to raw_customer_id in df_facts
     df_facts = df[['invoice_no', 'stock_code', 'customer_id', 'date_id', 'quantity', 'unit_price', 'total_value']].rename(columns={'customer_id': 'raw_customer_id'})
 
-    return df_products, df_customers, df_facts
+    # Write cleaned DataFrames to Silver layer
+    write_to_silver(df_products, df_customers, df_facts, engine)
     
 if __name__ == '__main__':
     run_transform()
