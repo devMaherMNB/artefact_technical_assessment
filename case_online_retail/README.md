@@ -9,30 +9,21 @@ Apache Airflow, with all services containerised via Docker Compose.
 
 ## Architecture
 
-┌─────────────────────────────┐
-│ Bronze: staging_online_retail │ Raw, exact copy of source. No cleaning.
-│ raw_transactions             │ TRUNCATE + reload on every run (idempotent).
-└─────────────────────────────┘
-│
-▼
-┌─────────────────────────────┐
-│ Silver: silver_online_retail │ Cleaned data with natural keys.
-│ products / customers /       │ Decouples transform from load.
-│ transactions                 │ Enables pipeline resumability.
-└─────────────────────────────┘
-│
-▼
-┌─────────────────────────────┐
-│ Gold: dw_online_retail       │ Star schema with surrogate keys,
-│ dim_products / dim_customers │ FK constraints, indexes, and
-│ dim_date / fact_sales        │ partitioning by date_id.
-└─────────────────────────────┘
-│
-▼
-┌─────────────────────────────┐
-│ Monitor                      │ 5 DQ checks: row count, null values,
-│                              │ negative totals, date range, staging gap.
-└─────────────────────────────┘
+```mermaid
+flowchart LR
+    CSV["online_retail.csv"]
+    BRONZE["Bronze Layer"]
+    SILVER["Silver Layer"]
+    GOLD["Gold Layer"]
+    MON["Monitor"]
+
+    CSV -->|"ingest.py"| BRONZE
+    BRONZE -->|"transform.py"| SILVER
+    SILVER -->|"load.py"| GOLD
+    GOLD -->|"monitor.py"| MON
+```
+
+
 
 **Tools:** Python 3.11 · Pandas · SQLAlchemy · PostgreSQL 15 · Apache Airflow 2.7.1 · Docker Compose
 
@@ -54,9 +45,11 @@ Apache Airflow, with all services containerised via Docker Compose.
 
 - Docker Desktop running
 - Copy `.env.example` to `.env` in the project root (required for manual script runs and tests):
+
 ```powershell
 Copy-Item .env.example .env
 ```
+
 > The default values match `docker-compose.yml` — no edits needed for local Docker setup.
 
 ### Setup
@@ -75,6 +68,7 @@ docker-compose exec app pip install -r requirements.txt
 
 ```powershell
 docker-compose exec app python case_online_retail/src/ingest.py
+# snapshot runs automatically as part of the DAG — skip when running manually
 docker-compose exec app python case_online_retail/src/transform.py
 docker-compose exec app python case_online_retail/src/load.py
 docker-compose exec app python case_online_retail/src/monitor.py
@@ -109,7 +103,7 @@ case_online_retail/
 │   ├── ingest.py                ← CSV → staging (Bronze)  
 │   ├── transform.py             ← staging → Silver (clean + write)  
 │   ├── load.py                  ← Silver → Gold (surrogate keys + DW)  
-│   └── monitor.py               ← DQ checks  
+│   └── monitor.py               ← Bronze→Silver→Gold pipeline audit + alerting  
 └── tests/  
     └── test_online_retail.py    ← 5 unit tests (no DB required)
 

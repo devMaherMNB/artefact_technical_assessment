@@ -10,12 +10,66 @@ The warehouse supports both standard analytical queries and advanced SQL feature
 
 ## Architecture
 
-```
-dim_time ──────────┐
-dim_products ──────┤
-dim_suppliers ─────┼──► fact_shipments
-dim_warehouses ────┤         │
-dim_orders ────────┘         └──► shipment_audit_log (via trigger)
+```mermaid
+erDiagram
+    dim_time {
+        int date_id PK
+        date full_date
+        int year
+        int quarter
+        int month
+        int week
+    }
+    dim_products {
+        int product_id PK
+        string product_name
+        string product_category
+        string sku
+        numeric unit_price
+    }
+    dim_suppliers {
+        int supplier_id PK
+        string supplier_name
+        string supplier_country
+        numeric rating
+    }
+    dim_warehouses {
+        int warehouse_id PK
+        string warehouse_name
+        string warehouse_location
+    }
+    dim_orders {
+        int order_id PK
+        date order_date
+        string order_status
+        string order_priority
+    }
+    fact_shipments {
+        int shipment_id PK
+        int product_id FK
+        int supplier_id FK
+        int warehouse_id FK
+        int order_id FK
+        int date_id FK
+        int quantity
+        numeric shipment_value
+        int shipping_time_hours
+    }
+    shipment_audit_log {
+        int audit_id PK
+        int shipment_id
+        string operation
+        numeric old_value
+        numeric new_value
+        timestamp changed_at
+    }
+
+    dim_products     ||--o{ fact_shipments : "product_id"
+    dim_suppliers    ||--o{ fact_shipments : "supplier_id"
+    dim_warehouses   ||--o{ fact_shipments : "warehouse_id"
+    dim_orders       ||--o{ fact_shipments : "order_id"
+    dim_time         ||--o{ fact_shipments : "date_id"
+    fact_shipments   ||--o{ shipment_audit_log : "trigger on UPDATE/DELETE"
 ```
 
 **Design Choices:**
