@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS supply_chain.shipment_audit_log (
 
 -- Then the trigger function
 CREATE OR REPLACE FUNCTION supply_chain.log_shipment_changes()
-RETURNS TRIGGER AS $
+RETURNS TRIGGER AS $$
 BEGIN
     IF TG_OP = 'DELETE' THEN
         INSERT INTO supply_chain.shipment_audit_log
@@ -78,7 +78,7 @@ BEGIN
     END IF;
     RETURN NULL;
 END;
-$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql;
 
 -- Attach the trigger to the fact table
 DROP TRIGGER IF EXISTS trg_shipment_audit ON supply_chain.fact_shipments;
